@@ -1,0 +1,6 @@
+# ignore
+*.exe
+*.o
+*.rc
+*.bat
+!WeeklyPlannerSetup.exe
