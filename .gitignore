@@ -3,4 +3,5 @@
 *.o
 *.rc
 *.bat
+*.png
 !WeeklyPlannerSetup.exe
