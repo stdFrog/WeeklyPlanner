@@ -9,11 +9,21 @@
 #define GET_BLUE(V)			((BYTE)(((DWORD_PTR)(V >> 16)) & 0xff))
 #define SET_RGB(R,G,B)		((COLORREF)(((BYTE)(R) | ((WORD)((BYTE)(G)) << 8)) | (((DWORD)(BYTE)(B)) << 16)))
 
+struct bwAttributes{
+	COLORREF	rgb;
+	BYTE		Opacity;
+	DWORD		Flags;
+};
 
 BOOL CheckLeapYear(int Year);
 void DrawBackground(HWND hWnd, HDC hdc, int GapWidth, int GridGap);
 void DrawCalendar(HDC hdc, RECT rt);
 void DrawCalendar(HDC hdc, int l, int t, int r, int b);
+void SetAttribute(HWND hWnd, struct bwAttributes Attr);
+void GetAttribute(HWND hWnd, struct bwAttributes *Attr);
+void OnKeyDown(HWND hWnd, WPARAM wParam, LPARAM lParam, struct bwAttributes* Attr);
+
+LRESULT OnNcHitTest(HWND hWnd, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam);
 
 int APIENTRY wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow){
@@ -31,11 +41,11 @@ int APIENTRY wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow){
 	RegisterClass(&wc);
 
 	HWND hWnd = CreateWindowEx(
-				WS_EX_CLIENTEDGE,
+				WS_EX_WINDOWEDGE | WS_EX_LAYERED,
 				CLASS_NAME,
 				CLASS_NAME,
-				WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
-				CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, 
+				WS_POPUP | WS_VISIBLE | WS_BORDER | WS_CLIPCHILDREN,
+				104, 104, 1024, 768,
 				NULL,
 				(HMENU)NULL,
 				hInst,
@@ -54,7 +64,7 @@ int APIENTRY wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow){
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam){
-	static const int nEdits = 5;
+	static const int nEdits = 5, BORDER = 12, EDGE = BORDER / 2;
 	static HWND hEdits[nEdits];
 
 	RECT wrt, crt, srt, trt;
@@ -69,14 +79,27 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 
 	BITMAP bmp;
 	DWORD dwStyle, dwExStyle;
-
-	static int GapWidth,
+	static int MinWidth,
+			   MaxWidth,
+			   GapWidth,
 			   GridGap = 20;
+
+	static struct bwAttributes Attr;
 
 	switch(iMessage){
 		case WM_CREATE:
 			hBkBrush = CreateSolidBrush(RGB(255, 245, 235));
+			MinWidth = 183;
+			Attr = {RGB(0,0,0), 200, LWA_ALPHA};
+			SetAttribute(hWnd, Attr);
 			return 0;
+
+		case WM_KEYDOWN:
+			OnKeyDown(hWnd, wParam, lParam, &Attr);
+			return 0;
+
+		case WM_NCHITTEST:
+			return OnNcHitTest(hWnd, wParam, lParam);
 
 		case WM_SIZE:
 			if(wParam != SIZE_MINIMIZED){
@@ -85,7 +108,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 					hBitmap = NULL;
 				}
 
-				GapWidth = LOWORD(lParam) / 6;
+				GapWidth = max(MinWidth, LOWORD(lParam) / 6);
 			}
 			return 0;
 
@@ -103,7 +126,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			// Draw
 			{
 				DrawBackground(hWnd, hMemDC, GapWidth, GridGap);
- 
 				int Center = GapWidth / 4;
 				int iRadius = (GapWidth - Center) / 4;
 
@@ -362,4 +384,77 @@ BOOL CheckLeapYear(int Year){
 
 void DrawCalendar(HDC hdc, RECT rt){
 	DrawCalendar(hdc, rt.left, rt.top, rt.right, rt.bottom);
+}
+
+LRESULT OnNcHitTest(HWND hWnd, WPARAM wParam, LPARAM lParam){
+	static const int BORDER = 12, EDGE = BORDER / 2;
+	POINT Mouse;
+	RECT wrt;
+
+	Mouse = { LOWORD(lParam), HIWORD(lParam) };
+	GetWindowRect(hWnd, &wrt);
+
+	if (Mouse.x >= wrt.left && Mouse.x < wrt.left + BORDER && Mouse.y >= wrt.top + EDGE && Mouse.y < wrt.bottom - EDGE) {
+		return HTLEFT;
+	}
+	if (Mouse.x <= wrt.right && Mouse.x > wrt.right - BORDER && Mouse.y >= wrt.top + EDGE && Mouse.y < wrt.bottom - EDGE) {
+		return HTRIGHT;
+	}
+	if (Mouse.y >= wrt.top && Mouse.y < wrt.top + BORDER && Mouse.x >= wrt.left + EDGE && Mouse.x < wrt.right - EDGE) {
+		return HTTOP;
+	}
+	if (Mouse.y <= wrt.bottom && Mouse.y > wrt.bottom - BORDER && Mouse.x >= wrt.left + EDGE && Mouse.x < wrt.right - EDGE) {
+		return HTBOTTOM;
+	}
+	if (Mouse.x >= wrt.left && Mouse.x < wrt.left + EDGE &&
+			Mouse.y >= wrt.top && Mouse.y < wrt.top + EDGE) {
+		return HTTOPLEFT;
+	}
+	if (Mouse.x <= wrt.right && Mouse.x > wrt.right - EDGE &&
+			Mouse.y >= wrt.top && Mouse.y < wrt.top + EDGE) {
+		return HTTOPRIGHT;
+	}
+	if (Mouse.x >= wrt.left && Mouse.x < wrt.left + EDGE &&
+			Mouse.y <= wrt.bottom && Mouse.y > wrt.bottom - EDGE) {
+		return HTBOTTOMLEFT;
+	}
+	if (Mouse.x <= wrt.right && Mouse.x > wrt.right - EDGE &&
+			Mouse.y <= wrt.bottom && Mouse.y > wrt.bottom - EDGE) {
+		return HTBOTTOMRIGHT;
+	}
+	if (Mouse.x >= wrt.left + BORDER && Mouse.x <= wrt.right - BORDER && Mouse.y >= wrt.top + BORDER && Mouse.y <= wrt.bottom - BORDER) {
+		return HTCAPTION;
+	}
+
+	return (DefWindowProc(hWnd, WM_NCHITTEST, wParam, lParam));
+}
+
+void SetAttribute(HWND hWnd, struct bwAttributes Attr){
+	SetLayeredWindowAttributes(hWnd, Attr.rgb, Attr.Opacity, Attr.Flags);
+}
+
+void GetAttribute(HWND hWnd, struct bwAttributes *Attr){
+	GetLayeredWindowAttributes(hWnd, &Attr->rgb, &Attr->Opacity, &Attr->Flags);
+}
+
+void OnKeyDown(HWND hWnd, WPARAM wParam, LPARAM lParam, struct bwAttributes* Attr){
+	switch(wParam){
+		case VK_ESCAPE:
+			if(MessageBox(hWnd, L"Do you want to close this program?", L"WeeklyPlanner", MB_YESNO) == IDYES){
+				DestroyWindow(hWnd);
+			}
+			break;
+
+		case VK_UP:
+			GetAttribute(hWnd, Attr);
+			Attr->Opacity = min(255, max(50, Attr->Opacity + 5));
+			SetAttribute(hWnd, *Attr);
+			break;
+
+		case VK_DOWN:
+			GetAttribute(hWnd, Attr);
+			Attr->Opacity = min(255, max(50, Attr->Opacity - 5));
+			SetAttribute(hWnd, *Attr);
+			break;
+	}
 }
