@@ -4,4 +4,5 @@
 *.rc
 *.bat
 *.png
+test.cpp
 !WeeklyPlannerSetup.exe
