@@ -17,8 +17,8 @@ void DrawCalendar(HDC hdc, RECT rt);
 void DrawCalendar(HDC hdc, int l, int t, int r, int b);
 void SetAttribute(HWND hWnd, struct bwAttributes Attr);
 void GetAttribute(HWND hWnd, struct bwAttributes *Attr);
-void DrawTodoList(HDC hdc, int l, int t, int r, int b);
-void DrawTodoList(HDC hdc, RECT rt);
+void DrawTodoList(HDC hdc, int FontSize, int l, int t, int r, int b);
+void DrawTodoList(HDC hdc, int FontSize, RECT rt);
 void OnKeyDown(HWND hWnd, WPARAM wParam, LPARAM lParam, struct bwAttributes* Attr);
 
 LRESULT OnNcHitTest(HWND hWnd, WPARAM wParam, LPARAM lParam);
@@ -276,6 +276,7 @@ void DrawCalendar(HDC hdc, int l, int t, int r, int b){
 	}
 
 	DeleteObject(hTodayBrush);
+	SetTextColor(hdc, RGB(0,0,0));
 	SetBkMode(hdc, OPAQUE);
 }
 
@@ -367,16 +368,25 @@ void OnKeyDown(HWND hWnd, WPARAM wParam, LPARAM lParam, struct bwAttributes* Att
 	}
 }
 
-void DrawTodoList(HDC hdc, int l, int t, int r, int b){
+void DrawTodoList(HDC hdc, int FontSize, int l, int t, int r, int b){
 	SIZE TextSize;
 
 	WCHAR buf[0x10];
 	wsprintf(buf, L"to-do list");
+
+	HFONT hFont = CreateFontW(FontSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FF_MODERN, L"Consolas");
+
+	SetBkMode(hdc, TRANSPARENT);
+	HFONT hOldFont = (HFONT)SelectObject(hdc, hFont);
 	TextOut(hdc, l, t, buf, wcslen(buf));
+
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hFont);
+	SetBkMode(hdc, OPAQUE);
 }
 
-void DrawTodoList(HDC hdc, RECT rt){
-	DrawTodoList(hdc, rt.left, rt.top, rt.right, rt.bottom);
+void DrawTodoList(HDC hdc, int FontSize, RECT rt){
+	DrawTodoList(hdc, FontSize, rt.left, rt.top, rt.right, rt.bottom);
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam){
@@ -413,10 +423,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 
 	static const int GridGap = 20,
 				 ButtonWidth = 16,
-				 ButtonHeight = 16;
+				 ButtonHeight = 16,
+				 FontSize = 24;
 
 	static POINT Origin;
-	static RECT rtCalendar;
+	static RECT rtCalendar, rtTodoList;
 
 	static struct bwAttributes Attr;
 
@@ -522,9 +533,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 
 				SetRect(&rtCalendar, Origin.x - iRadius - GridGap, Origin.y + iRadius + GridGap, 0, 0);
 				SetRect(&rtCalendar, rtCalendar.left, rtCalendar.top, rtCalendar.left + GapWidth, rtCalendar.top + GapWidth);
+				SetRect(&rtTodoList, rtCalendar.left, rtCalendar.bottom + GridGap, 0,0);
 
-				int x = rtCalendar.left,
-					y = rtCalendar.bottom + GridGap;
+				int x = rtTodoList.left,
+					y = rtTodoList.top + FontSize + GridGap;
 				HDWP hdwp = BeginDeferWindowPos(nButtons);
 				for(int i=0; i<nButtons; i++){
 					hdwp = DeferWindowPos(hdwp, hButtons[i], NULL, x, y + (ButtonHeight + GridGap) * i, ButtonWidth, ButtonHeight, SWP_NOSIZE | SWP_NOZORDER);
@@ -547,6 +559,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			// Draw
 			DrawBackground(hWnd, hMemDC, GapWidth, GridGap);
 			DrawCalendar(hMemDC, rtCalendar);
+			DrawTodoList(hMemDC, FontSize, rtTodoList);
 
 			GetObject(hBitmap, sizeof(BITMAP), &bmp);
 			BitBlt(hdc, 0,0, bmp.bmWidth, bmp.bmHeight, hMemDC, 0,0, SRCCOPY);
