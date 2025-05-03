@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <imm.h>
 #define CLASS_NAME			L"Weekly Planner"
 #define IDC_BTNTODOLIST		0x1000
 
@@ -26,6 +27,8 @@ void SetAttribute(HWND hWnd, struct bwAttributes Attr);
 void GetAttribute(HWND hWnd, struct bwAttributes *Attr);
 void DrawTodoList(HDC hdc, int FontSize, int l, int t, int r, int b);
 void DrawTodoList(HDC hdc, int FontSize, RECT rt);
+void DrawMemo(HDC hdc, int FontSize, int l, int t, int r, int b);
+void DrawMemo(HDC hdc, int FontSize, RECT rt);
 void OnKeyDown(HWND hWnd, WPARAM wParam, LPARAM lParam, struct bwAttributes* Attr);
 void GetRealDpi(HMONITOR hMonitor, float *XScale, float *YScale);
 
@@ -53,7 +56,7 @@ int APIENTRY wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow){
 			CLASS_NAME,
 			CLASS_NAME,
 			WS_POPUP | WS_VISIBLE | WS_BORDER | WS_CLIPCHILDREN,
-			104, 104, 1024, 768,
+			18, 16, 1152, 864,
 			NULL,
 			(HMENU)NULL,
 			hInst,
@@ -379,8 +382,6 @@ void OnKeyDown(HWND hWnd, WPARAM wParam, LPARAM lParam, struct bwAttributes* Att
 }
 
 void DrawTodoList(HDC hdc, int FontSize, int l, int t, int r, int b){
-	SIZE TextSize;
-
 	WCHAR buf[0x10];
 	wsprintf(buf, L"to-do list");
 
@@ -437,6 +438,43 @@ void GetRealDpi(HMONITOR hMonitor, float *XScale, float *YScale) {
 	*YScale = CurrentDpi / ((rt.bottom - rt.top) / (float)DevMode.dmPelsHeight);
 }
 
+void DrawMemo(HDC hdc, int FontSize, int l, int t, int r, int b, RECT base){
+	SIZE TextSize;
+
+	WCHAR buf[0x10];
+	wsprintf(buf, L"Memo");
+
+	HFONT hFont = CreateFontW(FontSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FF_MODERN, L"Consolas");
+
+	SetBkMode(hdc, TRANSPARENT);
+	HFONT hOldFont = (HFONT)SelectObject(hdc, hFont);
+	TextOut(hdc, l, t, buf, wcslen(buf));
+
+	GetTextExtentPoint32(hdc, buf, wcslen(buf), &TextSize);
+
+	int Gap = 5,
+		x = l,
+		y = t + Gap + TextSize.cy * 2,
+		nMemo = 7;
+
+	HPEN hPen = CreatePen(PS_SOLID, 3, RGB(0,0,0));
+	HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
+	for(int i=0; i<nMemo; i++){
+		MoveToEx(hdc, x, y + (TextSize.cy + 3) * i, NULL);
+		LineTo(hdc, base.right, y + (TextSize.cy + 3) * i);
+	}
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hPen);
+
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hFont);
+	SetBkMode(hdc, OPAQUE);
+}
+
+void DrawMemo(HDC hdc, int FontSize, RECT rt, RECT base){
+	DrawMemo(hdc, FontSize, rt.left, rt.top, rt.right, rt.bottom, base);
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam){
 	RECT wrt, crt, srt, trt;
 	HWND Target;
@@ -475,7 +513,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 				 FontSize = 24;
 
 	static POINT Origin;
-	static RECT rtCalendar, rtTodoList;
+	static RECT rtCalendar, rtTodoList, rtMemo;
 
 	static struct bwAttributes Attr;
 
@@ -623,6 +661,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 				SetRect(&rtCalendar, Origin.x - iRadius - GridGap, Origin.y + iRadius + GridGap, 0, 0);
 				SetRect(&rtCalendar, rtCalendar.left, rtCalendar.top, rtCalendar.left + GapWidth, rtCalendar.top + GapWidth);
 				SetRect(&rtTodoList, rtCalendar.left, rtCalendar.bottom + GridGap, 0,0);
+				SetRect(&rtMemo, rtTodoList.left, rtTodoList.top + FontSize + (ButtonHeight + GridGap * 2) * (nButtons - 1), 0,0);
 
 				int x = rtTodoList.left,
 					y = rtTodoList.top + FontSize + GridGap;
@@ -653,6 +692,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			DrawBackground(hWnd, hMemDC, GapWidth, GridGap);
 			DrawCalendar(hMemDC, rtCalendar);
 			DrawTodoList(hMemDC, FontSize, rtTodoList);
+			DrawMemo(hMemDC, FontSize, rtMemo, rtCalendar);
 
 			GetObject(hBitmap, sizeof(BITMAP), &bmp);
 			BitBlt(hdc, 0,0, bmp.bmWidth, bmp.bmHeight, hMemDC, 0,0, SRCCOPY);
