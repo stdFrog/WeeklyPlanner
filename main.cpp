@@ -5,6 +5,13 @@
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 #define max(a,b) (((a) > (b)) ? (a) : (b))
 
+struct MonitorData {
+	int nMonitors;
+	int CurrentMonitor;
+	RECT *rtMonitors;
+	HMONITOR *hMonitors;
+};
+
 struct bwAttributes{
 	COLORREF	rgb;
 	BYTE		Opacity;
@@ -20,9 +27,12 @@ void GetAttribute(HWND hWnd, struct bwAttributes *Attr);
 void DrawTodoList(HDC hdc, int FontSize, int l, int t, int r, int b);
 void DrawTodoList(HDC hdc, int FontSize, RECT rt);
 void OnKeyDown(HWND hWnd, WPARAM wParam, LPARAM lParam, struct bwAttributes* Attr);
+void GetRealDpi(HMONITOR hMonitor, float *XScale, float *YScale);
+
 
 LRESULT OnNcHitTest(HWND hWnd, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam);
+BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPARAM dwData);
 
 int APIENTRY wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow){
 	WNDCLASS wc = {
@@ -389,6 +399,44 @@ void DrawTodoList(HDC hdc, int FontSize, RECT rt){
 	DrawTodoList(hdc, FontSize, rt.left, rt.top, rt.right, rt.bottom);
 }
 
+BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPARAM dwData){
+	MONITORINFOEX miex;
+	
+	miex.cbSize = sizeof(MONITORINFOEX);
+	GetMonitorInfo(hMonitor, &miex);
+
+	struct MonitorData* pmd = (struct MonitorData*)dwData;
+	int &Current	= pmd->CurrentMonitor, 
+		&nTotal		= pmd->nMonitors;
+
+	if(Current < nTotal){
+		pmd->hMonitors[Current] = hMonitor;
+		(*(((LPRECT)(pmd->rtMonitors)) + Current)) = *lprcMonitor;
+		Current++;
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+void GetRealDpi(HMONITOR hMonitor, float *XScale, float *YScale) {
+	MONITORINFOEX Info;
+	memset(&Info, 0, sizeof(MONITORINFOEX));
+	Info.cbSize = sizeof(MONITORINFOEX);
+	GetMonitorInfo(hMonitor, &Info);
+
+	DEVMODE DevMode;
+	memset(&DevMode, 0, sizeof(DEVMODE));
+	DevMode.dmSize = sizeof(DEVMODE);
+	EnumDisplaySettings(Info.szDevice, ENUM_CURRENT_SETTINGS, &DevMode);
+
+	RECT rt = Info.rcMonitor;
+
+	float CurrentDpi = GetDpiForSystem() / USER_DEFAULT_SCREEN_DPI;
+	*XScale = CurrentDpi / ((rt.right - rt.left) / (float)DevMode.dmPelsWidth);
+	*YScale = CurrentDpi / ((rt.bottom - rt.top) / (float)DevMode.dmPelsHeight);
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam){
 	RECT wrt, crt, srt, trt;
 	HWND Target;
@@ -469,6 +517,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 		0xff, 0xff,
 	};
 
+	static struct MonitorData *pmd;
+
 	switch(iMessage){
 		case WM_CREATE:
 			idx = id = 0;
@@ -487,12 +537,43 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 				bChecked[i] = FALSE;
 				hButtons[i] = CreateWindow(L"button", NULL, WS_VISIBLE | WS_CHILD | BS_OWNERDRAW | WS_TABSTOP, 0,0, ButtonWidth, ButtonHeight, hWnd, (HMENU)(INT_PTR)(IDC_BTNTODOLIST + i), GetModuleHandle(NULL), NULL);
 			}
+
+			pmd = (struct MonitorData*)malloc(sizeof(MonitorData));
+			pmd->CurrentMonitor = 0;
+			pmd->nMonitors	= GetSystemMetrics(SM_CMONITORS);
+			pmd->rtMonitors	= (RECT*)calloc(pmd->nMonitors, sizeof(RECT));
+			pmd->hMonitors	= (HMONITOR*)calloc(pmd->nMonitors, sizeof(HMONITOR));
+			EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, (LPARAM)pmd);
+			return 0;
+
+		case WM_WINDOWPOSCHANGING:
+			{
+				MONITORINFOEX miex;
+				memset(&miex, 0, sizeof(miex));
+				miex.cbSize = sizeof(miex);
+
+				HMONITOR hCurrentMonitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
+				GetMonitorInfo(hCurrentMonitor, &miex);
+
+				LPWINDOWPOS lpwp = (LPWINDOWPOS)lParam;
+				int SideSnap = 10;
+
+				if (abs(lpwp->x - miex.rcMonitor.left) < SideSnap) {
+					lpwp->x = miex.rcMonitor.left;
+				} else if (abs(lpwp->x + lpwp->cx - miex.rcMonitor.right) < SideSnap) {
+					lpwp->x = miex.rcMonitor.right - lpwp->cx;
+				} 
+				if (abs(lpwp->y - miex.rcMonitor.top) < SideSnap) {
+					lpwp->y = miex.rcMonitor.top;
+				} else if (abs(lpwp->y + lpwp->cy - miex.rcMonitor.bottom) < SideSnap) {
+					lpwp->y = miex.rcMonitor.bottom - lpwp->cy;
+				}
+			}
 			return 0;
 
 		case WM_GETMINMAXINFO:
 			{
 				LPMINMAXINFO lpmmi = (LPMINMAXINFO)lParam;
-
 				lpmmi->ptMinTrackSize.x = rtCalendar.left + rtCalendar.right;
 			}
 			return 0;
@@ -553,6 +634,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			}
 			return 0;
 
+		case WM_DISPLAYCHANGE:
+			EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, (LPARAM)pmd);
+			return 0;
+
 		case WM_PAINT:
 			hdc = BeginPaint(hWnd, &ps);
 			hMemDC = CreateCompatibleDC(hdc);
@@ -582,10 +667,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			if(hUnCheckedBitmap){ DeleteObject(hUnCheckedBitmap); }
 			if(hBkBrush) { DeleteObject(hBkBrush); }
 			if(hBitmap) { DeleteObject(hBitmap); }
+			if(pmd) {
+				free(pmd->rtMonitors);
+				free(pmd->hMonitors);
+				free(pmd);
+			}
 			PostQuitMessage(0);
 			return 0;
 	}
 
 	return (DefWindowProc(hWnd, iMessage, wParam, lParam));
 }
+
 
