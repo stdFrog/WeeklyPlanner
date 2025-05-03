@@ -1,13 +1,9 @@
 #include <windows.h>
-#define CLASS_NAME	L"Weekly Planner"
+#define CLASS_NAME			L"Weekly Planner"
+#define IDC_BTNTODOLIST		0x1000
 
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 #define max(a,b) (((a) > (b)) ? (a) : (b))
-
-#define GET_RED(V)			((BYTE)(((DWORD_PTR)(V)) & 0xff))
-#define GET_GREEN(V)		((BYTE)(((DWORD_PTR)(((WORD)(V))) >> 8) & 0xff))
-#define GET_BLUE(V)			((BYTE)(((DWORD_PTR)(V >> 16)) & 0xff))
-#define SET_RGB(R,G,B)		((COLORREF)(((BYTE)(R) | ((WORD)((BYTE)(G)) << 8)) | (((DWORD)(BYTE)(B)) << 16)))
 
 struct bwAttributes{
 	COLORREF	rgb;
@@ -21,6 +17,8 @@ void DrawCalendar(HDC hdc, RECT rt);
 void DrawCalendar(HDC hdc, int l, int t, int r, int b);
 void SetAttribute(HWND hWnd, struct bwAttributes Attr);
 void GetAttribute(HWND hWnd, struct bwAttributes *Attr);
+void DrawTodoList(HDC hdc, int l, int t, int r, int b);
+void DrawTodoList(HDC hdc, RECT rt);
 void OnKeyDown(HWND hWnd, WPARAM wParam, LPARAM lParam, struct bwAttributes* Attr);
 
 LRESULT OnNcHitTest(HWND hWnd, WPARAM wParam, LPARAM lParam);
@@ -41,15 +39,15 @@ int APIENTRY wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow){
 	RegisterClass(&wc);
 
 	HWND hWnd = CreateWindowEx(
-				WS_EX_WINDOWEDGE | WS_EX_LAYERED,
-				CLASS_NAME,
-				CLASS_NAME,
-				WS_POPUP | WS_VISIBLE | WS_BORDER | WS_CLIPCHILDREN,
-				104, 104, 1024, 768,
-				NULL,
-				(HMENU)NULL,
-				hInst,
-				NULL
+			WS_EX_WINDOWEDGE | WS_EX_LAYERED,
+			CLASS_NAME,
+			CLASS_NAME,
+			WS_POPUP | WS_VISIBLE | WS_BORDER | WS_CLIPCHILDREN,
+			104, 104, 1024, 768,
+			NULL,
+			(HMENU)NULL,
+			hInst,
+			NULL
 			);
 
 	ShowWindow(hWnd, nCmdShow);
@@ -61,100 +59,6 @@ int APIENTRY wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow){
 	}
 
 	return (int)msg.wParam;
-}
-
-LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam){
-	static const int nEdits = 5, BORDER = 12, EDGE = BORDER / 2;
-	static HWND hEdits[nEdits];
-
-	RECT wrt, crt, srt, trt;
-	HWND Target;
-
-	PAINTSTRUCT ps;
-	HDC hdc, hMemDC;
-
-	static HBRUSH hBkBrush;
-	static HBITMAP hBitmap;
-	HGDIOBJ hOld;
-
-	BITMAP bmp;
-	DWORD dwStyle, dwExStyle;
-	static int MinWidth,
-			   MaxWidth,
-			   GapWidth,
-			   GridGap = 20;
-
-	static struct bwAttributes Attr;
-
-	switch(iMessage){
-		case WM_CREATE:
-			hBkBrush = CreateSolidBrush(RGB(255, 245, 235));
-			MinWidth = 183;
-			Attr = {RGB(0,0,0), 200, LWA_ALPHA};
-			SetAttribute(hWnd, Attr);
-			return 0;
-
-		case WM_KEYDOWN:
-			OnKeyDown(hWnd, wParam, lParam, &Attr);
-			return 0;
-
-		case WM_NCHITTEST:
-			return OnNcHitTest(hWnd, wParam, lParam);
-
-		case WM_SIZE:
-			if(wParam != SIZE_MINIMIZED){
-				if(hBitmap != NULL){
-					DeleteObject(hBitmap);
-					hBitmap = NULL;
-				}
-
-				GapWidth = max(MinWidth, LOWORD(lParam) / 6);
-			}
-			return 0;
-
-		case WM_PAINT:
-			hdc = BeginPaint(hWnd, &ps);
-			hMemDC = CreateCompatibleDC(hdc);
-
-			GetClientRect(hWnd, &crt);
-			if(hBitmap == NULL){
-				hBitmap = CreateCompatibleBitmap(hdc, crt.right, crt.bottom);
-			}
-			hOld = SelectObject(hMemDC, hBitmap);
-			FillRect(hMemDC, &crt, hBkBrush);
-
-			// Draw
-			{
-				DrawBackground(hWnd, hMemDC, GapWidth, GridGap);
-				int Center = GapWidth / 4;
-				int iRadius = (GapWidth - Center) / 4;
-
-				POINT Origin;
-				Origin.x = Center + iRadius;
-				Origin.y = iRadius + iRadius / 2;
-
-				RECT rtCalendar;
-				SetRect(&rtCalendar, Origin.x - iRadius - GridGap, Origin.y + iRadius + GridGap, 0, 0);
-				SetRect(&rtCalendar, rtCalendar.left, rtCalendar.top, rtCalendar.left + GapWidth, rtCalendar.top + GapWidth);
-				DrawCalendar(hMemDC, rtCalendar);
-			}
-
-			GetObject(hBitmap, sizeof(BITMAP), &bmp);
-			BitBlt(hdc, 0,0, bmp.bmWidth, bmp.bmHeight, hMemDC, 0,0, SRCCOPY);
-
-			SelectObject(hMemDC, hOld);
-			DeleteDC(hMemDC);
-			EndPaint(hWnd, &ps);
-			return 0;
-
-		case WM_DESTROY:
-			if(hBkBrush) { DeleteObject(hBkBrush); }
-			if(hBitmap) { DeleteObject(hBitmap); }
-			PostQuitMessage(0);
-			return 0;
-	}
-
-	return (DefWindowProc(hWnd, iMessage, wParam, lParam));
 }
 
 void DrawBackground(HWND hWnd, HDC hdc, int GapWidth, int GridGap){
@@ -274,7 +178,7 @@ void DrawCalendar(HDC hdc, int l, int t, int r, int b){
 	st.wDay		= 1;
 	SystemTimeToFileTime(&st, &ft);
 	FileTimeToSystemTime(&ft, &st);
-	
+
 	DayOfWeek	= st.wDayOfWeek;
 
 	HPEN hPen = (HPEN)GetStockObject(NULL_PEN),
@@ -359,11 +263,11 @@ void DrawCalendar(HDC hdc, int l, int t, int r, int b){
 		}else if(DayOfWeek == 6){
 			SetTextColor(hdc, BeginningWeekendColor);
 		}else{
-			SetTextColor(hdc, SET_RGB(0,0,0));
+			SetTextColor(hdc, RGB(0,0,0));
 		}
 
 		TextOut(hdc, l + DayOfWeek * ColumnGap+ x, yy + y, DayBuf, wcslen(DayBuf));
-	
+
 		DayOfWeek++;
 		if(DayOfWeek == 7){
 			DayOfWeek = 0;
@@ -438,9 +342,13 @@ void GetAttribute(HWND hWnd, struct bwAttributes *Attr){
 }
 
 void OnKeyDown(HWND hWnd, WPARAM wParam, LPARAM lParam, struct bwAttributes* Attr){
+	int ret;
+
 	switch(wParam){
 		case VK_ESCAPE:
-			if(MessageBox(hWnd, L"Do you want to close this program?", L"WeeklyPlanner", MB_YESNO) == IDYES){
+			ret = MessageBox(NULL, L"Do you want to close this program?", L"WeeklyPlanner", MB_YESNO | MB_ICONQUESTION | MB_TASKMODAL);
+
+			if(ret == IDYES){
 				DestroyWindow(hWnd);
 			}
 			break;
@@ -458,3 +366,205 @@ void OnKeyDown(HWND hWnd, WPARAM wParam, LPARAM lParam, struct bwAttributes* Att
 			break;
 	}
 }
+
+void DrawTodoList(HDC hdc, int l, int t, int r, int b){
+	SIZE TextSize;
+
+	WCHAR buf[0x10];
+	wsprintf(buf, L"to-do list");
+	TextOut(hdc, l, t, buf, wcslen(buf));
+}
+
+void DrawTodoList(HDC hdc, RECT rt){
+	DrawTodoList(hdc, rt.left, rt.top, rt.right, rt.bottom);
+}
+
+LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam){
+	RECT wrt, crt, srt, trt;
+	HWND Target;
+
+	PAINTSTRUCT ps;
+	HDC hdc, hMemDC;
+
+	HGDIOBJ hOld;
+
+	BITMAP bmp;
+	DWORD dwStyle, dwExStyle;
+
+	int idx, id;
+	static const int nEdits = 5,
+				 nButtons = 5,
+				 BORDER = 12,
+				 EDGE = BORDER / 2;
+
+	static HWND hEdits[nEdits], 
+				hButtons[nButtons];
+
+	static BOOL bChecked[nButtons];
+
+	static HBRUSH hBkBrush;
+	static HBITMAP hBitmap, hUnCheckedBitmap, hCheckedBitmap;
+
+	static int MinWidth,
+			   MaxWidth,
+			   GapWidth,
+			   Center,
+			   iRadius;
+
+	static const int GridGap = 20,
+				 ButtonWidth = 16,
+				 ButtonHeight = 16;
+
+	static POINT Origin;
+	static RECT rtCalendar;
+
+	static struct bwAttributes Attr;
+
+	static const BYTE UnCheckedBit[] = {
+		0xff, 0xff,
+		0xff, 0xff,
+		0xc0, 0x07,
+		0xc0, 0x07,
+		0xcf, 0xe7,
+		0xcf, 0xe7,
+		0xcf, 0xe7,
+		0xcf, 0xe7,
+		0xcf, 0xe7,
+		0xcf, 0xe7,
+		0xcf, 0xe7,
+		0xcf, 0xe7,
+		0xc0, 0x07,
+		0xc0, 0x07,
+		0xff, 0xff,
+		0xff, 0xff
+	};
+
+	static const BYTE CheckedBit[] = {
+		0xff, 0xff,
+		0xff, 0xff,
+		0xc0, 0x00,
+		0xc0, 0x01,
+		0xc0, 0xe3,
+		0xcf, 0xc7,
+		0xcb, 0x87,
+		0xc9, 0x07,
+		0xc8, 0x27,
+		0xcc, 0x67,
+		0xc7, 0xe7,
+		0xcf, 0xe7,
+		0xc0, 0x07,
+		0xc0, 0x07,
+		0xff, 0xff,
+		0xff, 0xff,
+	};
+
+	switch(iMessage){
+		case WM_CREATE:
+			idx = id = 0;
+			MinWidth = 183;
+			hBkBrush = CreateSolidBrush(RGB(255, 245, 235));
+			Attr = {RGB(0,0,0), 255, LWA_ALPHA};
+			SetAttribute(hWnd, Attr);
+
+			hUnCheckedBitmap = (HBITMAP)CreateBitmap(ButtonWidth, ButtonHeight, 1, 1, UnCheckedBit);
+			hCheckedBitmap = (HBITMAP)CreateBitmap(ButtonWidth, ButtonHeight, 1, 1, CheckedBit);
+			if (!hCheckedBitmap || !hUnCheckedBitmap) {
+				MessageBox(hWnd, L"비트맵 생성 실패", L"WeeklyPlanner", MB_OK);
+			}
+
+			for(int i=0; i<nButtons; i++){
+				bChecked[i] = FALSE;
+				hButtons[i] = CreateWindow(L"button", NULL, WS_VISIBLE | WS_CHILD | BS_OWNERDRAW | WS_TABSTOP, 0,0, ButtonWidth, ButtonHeight, hWnd, (HMENU)(INT_PTR)(IDC_BTNTODOLIST + i), GetModuleHandle(NULL), NULL);
+			}
+			return 0;
+
+		case WM_KEYDOWN:
+			OnKeyDown(hWnd, wParam, lParam, &Attr);
+			return 0;
+
+		case WM_NCHITTEST:
+			return OnNcHitTest(hWnd, wParam, lParam);
+
+		case WM_COMMAND:
+			id = LOWORD(wParam);
+			if (id >= IDC_BTNTODOLIST && id < IDC_BTNTODOLIST + nButtons) {
+				idx = id - IDC_BTNTODOLIST;
+				bChecked[idx] = !bChecked[idx];
+				SetFocus(hWnd);
+			}
+			InvalidateRect(hWnd, NULL, FALSE);
+			return 0;
+
+		case WM_DRAWITEM:
+			{
+				LPDRAWITEMSTRUCT lpdis = (LPDRAWITEMSTRUCT)lParam;
+				HDC hMemDC = CreateCompatibleDC(lpdis->hDC);
+				idx = lpdis->CtlID - IDC_BTNTODOLIST;
+				SelectObject(hMemDC, bChecked[idx] ? hCheckedBitmap : hUnCheckedBitmap);
+				BitBlt(lpdis->hDC, lpdis->rcItem.left, lpdis->rcItem.top, lpdis->rcItem.right - lpdis->rcItem.left, lpdis->rcItem.bottom - lpdis->rcItem.top, hMemDC, 0,0, SRCCOPY);
+				DeleteDC(hMemDC);
+			}
+			return TRUE;
+
+		case WM_SIZE:
+			if(wParam != SIZE_MINIMIZED){
+				if(hBitmap != NULL){
+					DeleteObject(hBitmap);
+					hBitmap = NULL;
+				}
+
+				GapWidth = max(MinWidth, LOWORD(lParam) / (nEdits + 1));
+				Center = GapWidth / 4;
+				iRadius = (GapWidth - Center) / 4;
+
+				Origin.x = Center + iRadius;
+				Origin.y = iRadius + iRadius / 2;
+
+				SetRect(&rtCalendar, Origin.x - iRadius - GridGap, Origin.y + iRadius + GridGap, 0, 0);
+				SetRect(&rtCalendar, rtCalendar.left, rtCalendar.top, rtCalendar.left + GapWidth, rtCalendar.top + GapWidth);
+
+				int x = rtCalendar.left,
+					y = rtCalendar.bottom + GridGap;
+				HDWP hdwp = BeginDeferWindowPos(nButtons);
+				for(int i=0; i<nButtons; i++){
+					hdwp = DeferWindowPos(hdwp, hButtons[i], NULL, x, y + (ButtonHeight + GridGap) * i, ButtonWidth, ButtonHeight, SWP_NOSIZE | SWP_NOZORDER);
+				}
+				EndDeferWindowPos(hdwp);
+			}
+			return 0;
+
+		case WM_PAINT:
+			hdc = BeginPaint(hWnd, &ps);
+			hMemDC = CreateCompatibleDC(hdc);
+
+			GetClientRect(hWnd, &crt);
+			if(hBitmap == NULL){
+				hBitmap = CreateCompatibleBitmap(hdc, crt.right, crt.bottom);
+			}
+			hOld = SelectObject(hMemDC, hBitmap);
+			FillRect(hMemDC, &crt, hBkBrush);
+
+			// Draw
+			DrawBackground(hWnd, hMemDC, GapWidth, GridGap);
+			DrawCalendar(hMemDC, rtCalendar);
+
+			GetObject(hBitmap, sizeof(BITMAP), &bmp);
+			BitBlt(hdc, 0,0, bmp.bmWidth, bmp.bmHeight, hMemDC, 0,0, SRCCOPY);
+
+			SelectObject(hMemDC, hOld);
+			DeleteDC(hMemDC);
+			EndPaint(hWnd, &ps);
+			return 0;
+
+		case WM_DESTROY:
+			if(hCheckedBitmap){ DeleteObject(hCheckedBitmap); }
+			if(hUnCheckedBitmap){ DeleteObject(hUnCheckedBitmap); }
+			if(hBkBrush) { DeleteObject(hBkBrush); }
+			if(hBitmap) { DeleteObject(hBitmap); }
+			PostQuitMessage(0);
+			return 0;
+	}
+
+	return (DefWindowProc(hWnd, iMessage, wParam, lParam));
+}
+
