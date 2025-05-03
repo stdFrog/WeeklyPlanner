@@ -489,6 +489,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			}
 			return 0;
 
+		case WM_GETMINMAXINFO:
+			{
+				LPMINMAXINFO lpmmi = (LPMINMAXINFO)lParam;
+
+				lpmmi->ptMinTrackSize.x = rtCalendar.left + rtCalendar.right;
+			}
+			return 0;
+
 		case WM_KEYDOWN:
 			OnKeyDown(hWnd, wParam, lParam, &Attr);
 			return 0;
