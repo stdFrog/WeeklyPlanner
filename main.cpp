@@ -1049,6 +1049,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			}
 			return 0;
 
+		case WM_EXITSIZEMOVE:
+			SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+			return 0;
+
 		case WM_DISPLAYCHANGE:
 			EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, (LPARAM)pmd);
 			return 0;
