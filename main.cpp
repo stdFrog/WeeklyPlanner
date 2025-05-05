@@ -32,6 +32,26 @@ void DrawMemo(HDC hdc, int FontSize, RECT rt);
 void OnKeyDown(HWND hWnd, WPARAM wParam, LPARAM lParam, struct bwAttributes* Attr);
 void GetRealDpi(HMONITOR hMonitor, float *XScale, float *YScale);
 
+int GetWrap();
+int GetFontHeight(HWND hWnd);
+int GetLineHeight(HWND hWnd);
+
+int GetPrevFP(int iPosition);
+int GetNextFP(int iPosition);
+int GetCharWidth(HDC hdc, WCHAR* ch, int Length);
+void SetCaret(HWND hWnd, WCHAR* buf, int FP, BOOL bComposition);
+
+void Insert(WCHAR* buf, int iPosition, WCHAR* cbuf);
+void Delete(WCHAR* buf, int iPosition, int nCount);
+void SetImeMode(HWND hWnd, BOOL bHan);
+
+int GetRowCount(HWND hWnd, WCHAR* buf);
+int GetLineSub(HWND hWnd, WCHAR *&p);
+void GetLine(HWND hWnd, WCHAR* buf, int Line, int &s, int &e);
+
+void GetRCFromOff(HWND hWnd, WCHAR* buf, int iPosition, int &Row, int &Column);
+int GetOffFromRC(HWND hWnd, WCHAR* buf, int Row, int Column);
+void GetXYFromOff(HWND hWnd, WCHAR* buf, int iPosition, int &x, int &y);
 
 LRESULT OnNcHitTest(HWND hWnd, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam);
@@ -475,6 +495,244 @@ void DrawMemo(HDC hdc, int FontSize, RECT rt, RECT base){
 	DrawMemo(hdc, FontSize, rt.left, rt.top, rt.right, rt.bottom, base);
 }
 
+int GetWrap(){
+	// 정렬(0: 안함, 1: 글자, 2:글자, 단어, 3:단어)
+	static int nWrap = 2;
+	return nWrap;
+}
+
+int GetFontHeight(HWND hWnd){
+	TEXTMETRIC tm;
+	HDC hdc = GetDC(hWnd);
+	GetTextMetrics(hdc, &tm);
+	ReleaseDC(hWnd, hdc);
+
+	return tm.tmHeight;
+}
+
+int GetLineHeight(HWND hWnd){
+	int LineRatio = 120,
+		LineHeight = GetFontHeight(hWnd) * LineRatio / 100;
+
+	return LineHeight;
+}
+
+int GetCharWidth(HDC hdc, WCHAR *ch, int Length){
+	SIZE TextSize;
+
+	GetTextExtentPoint32(hdc, ch, Length, &TextSize);
+	return TextSize.cx;
+}
+
+void SetCaret(HWND hWnd, WCHAR* buf, int FP, BOOL bComposition){
+	HDC hdc;
+	SIZE TextSize;
+
+	int tFP, 
+		CareWidth, 
+		tSize = sizeof(WCHAR),
+		x, y,
+		FontHeight = GetFontHeight(hWnd);
+
+	hdc = GetDC(hWnd);
+	tFP = (bComposition) ? ((FP) - tSize) : (FP);
+	CareWidth = (bComposition) ? (GetCharWidth(hdc, buf + tFP, 1)) : (tSize);
+
+	CreateCaret(hWnd, NULL, CareWidth, FontHeight);
+	ShowCaret(hWnd);
+
+	// GetTextExtentPoint32(hdc, buf, tFP, &TextSize);
+	// SetCaretPos(TextSize.cx, 0);
+
+	GetXYFromOff(hWnd, buf, tFP, x, y);
+	SetCaretPos(x,y);
+
+	ReleaseDC(hWnd, hdc);
+}
+
+int GetPrevFP(int iPosition){
+	if(iPosition == 0){ return 0; }
+
+	int i, Increase = 1;
+	for(i = 0; i<iPosition; i+=Increase){;}
+	return i - Increase;
+}
+
+int GetNextFP(int iPosition){
+	return iPosition + 1;
+}
+
+void Insert(WCHAR* buf, int iPosition, WCHAR *cbuf){
+	int Length = wcslen(cbuf),
+		MoveLength,
+		tSize = sizeof(WCHAR);
+
+	if (Length ==0) { return; }
+	MoveLength = wcslen(buf + iPosition) + 1;
+	memmove(buf + (iPosition + Length), buf + iPosition, MoveLength * tSize);
+	memcpy(buf + iPosition, cbuf, Length * tSize);
+}
+
+void Delete(WCHAR* buf, int iPosition, int nCount){
+	int MoveLength;
+
+	if (nCount == 0) return;
+	if (wcslen(buf) < iPosition + nCount) return;
+
+	MoveLength = wcslen(buf + iPosition + nCount) + 1;
+	memmove(buf + iPosition, buf + (iPosition + nCount), MoveLength * sizeof(WCHAR));
+}
+
+void SetImeMode(HWND hWnd, BOOL bHan){
+	HIMC hImc;
+	hImc = ImmGetContext(hWnd);
+
+	if (bHan == TRUE) {
+		ImmSetConversionStatus(hImc, IME_CMODE_NATIVE, IME_SMODE_NONE);
+	} else {
+		ImmSetConversionStatus(hImc, 0, IME_SMODE_NONE);
+	}
+
+	ImmReleaseContext(hWnd, hImc);
+}
+
+int GetLineSub(HWND hWnd, WCHAR *&p){
+	HDC hdc;
+	RECT crt;
+	WCHAR *EndPos = NULL;
+	BOOL IsPrevDBCS = FALSE;
+	int Length, acWidth, ret, nWrap = GetWrap();
+
+	hdc = GetDC(hWnd);
+	GetClientRect(hWnd,&crt);
+
+	if(nWrap == 0){
+		while(p){
+			if(*p == 0){ ret=0; break; }
+			if(*p == '\r'){ ret=1; break; }
+		}
+	}else{
+		acWidth = 0;
+		Length = 1;
+
+		while(1){
+			EndPos = p;
+			acWidth += GetCharWidth(hdc, p, Length);
+
+			if(*p == '\r'){
+				EndPos = p;
+				ret = 1;
+				break;
+			}
+
+			if(*p == 0){
+				EndPos = p;
+				ret = 0;
+				break;
+			}
+
+			if (acWidth > crt.right - 2) {
+				ret = 1;
+				break;
+			}
+
+			if (*p == ' ' || *p == '\t') {
+				EndPos = p + 1;
+			}
+
+			p += Length;
+		}
+	}
+	ReleaseDC(hWnd,hdc);
+
+	if (nWrap == 1 || EndPos == NULL) {
+		p = p;
+	}else{
+		p = EndPos;
+	}
+
+	return ret;
+}
+
+// Zero Base
+void GetLine(HWND hWnd, WCHAR* buf, int Line, int &s, int &e){
+	WCHAR *p = buf;
+
+	int i=0;
+	while(1){
+		if(i == Line){ break; }
+		if(GetLineSub(hWnd, p) == 0){ s = e = -1; return; }		// 못찾음
+
+		// 줄 끝으로 이동 후 개행문자 건너뜀
+		p += 1;
+
+		// 다음 줄로 이동
+		i++;
+	}
+
+	// 현재 줄의 시작 위치
+	s = p - buf;
+
+	// 현재 줄의 끝 위치
+	GetLineSub(hWnd, p);
+	e = p - buf;
+}
+
+// 몇 번째 행, 열인지 조사
+void GetRCFromOff(HWND hWnd, WCHAR* buf, int iPosition, int &Row, int &Column) {
+	WCHAR *p = buf;
+	Row = 0;
+
+	int s,e;
+	while(p - buf != iPosition){
+		if(*p == '\r'){ Row++; }
+		p++;
+	}
+
+	GetLine(hWnd, buf, Row, s, e);
+	Column = iPosition - s;
+}
+
+// 행, 열로부터 오프셋 조사
+int GetOffFromRC(HWND hWnd, WCHAR* buf, int Row, int Column){
+	int s,e;
+	GetLine(hWnd, buf, Row, s, e);
+	Column = min(Column, e - s);
+	return s + Column;
+}
+
+void GetXYFromOff(HWND hWnd, WCHAR* buf, int iPosition, int &x, int &y){
+	int Row, Column, s, e, LineHeight = GetLineHeight(hWnd);
+
+	HDC hdc;
+
+	GetRCFromOff(hWnd, buf, iPosition, Row, Column);
+	y = Row * LineHeight;
+
+	GetLine(hWnd, buf, Row, s, e);
+
+	hdc = GetDC(hWnd);
+	x = GetCharWidth(hdc, buf + s, iPosition - s);
+	ReleaseDC(hWnd, hdc);
+}
+
+int GetLineHeight(int FontHeight){
+	int LineRatio = 120,
+		LineHeight = FontHeight * LineRatio / 100;
+
+	return LineHeight;
+}
+
+int GetRowCount(HWND hWnd, WCHAR* buf){
+	int Line, s, e;
+	for(Line = 0; ; Line++){
+		GetLine(hWnd, buf, Line, s, e);
+		if(s == -1){ break; }
+	}
+
+	return Line ;
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam){
 	RECT wrt, crt, srt, trt;
 	HWND Target;
@@ -487,7 +745,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 	BITMAP bmp;
 	DWORD dwStyle, dwExStyle;
 
+	HIMC hImc;
+	WCHAR szbuf[0x10], szAbuf[0x10];
+
 	int idx, id;
+	int Line, s, e;
+
 	static const int nEdits = 5,
 				 nButtons = 5,
 				 BORDER = 12,
@@ -557,6 +820,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 
 	static struct MonitorData *pmd;
 
+	static WCHAR *buf, *tbuf;
+	static BOOL bComposition;
+	static int FP,
+			   FontHeight,
+			   TextWidth,
+			   CSLength,
+			   tSize,
+			   LineRatio,
+			   LineHeight,
+			   Row,
+			   Column;
+
 	switch(iMessage){
 		case WM_CREATE:
 			idx = id = 0;
@@ -582,6 +857,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			pmd->rtMonitors	= (RECT*)calloc(pmd->nMonitors, sizeof(RECT));
 			pmd->hMonitors	= (HMONITOR*)calloc(pmd->nMonitors, sizeof(HMONITOR));
 			EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, (LPARAM)pmd);
+
+			Line = s = e = 0;
+			FP = 0;
+			tSize = sizeof(WCHAR);
+			bComposition = FALSE;
+			SetImeMode(hWnd, TRUE);
+
+			buf = (WCHAR*)malloc(0x10000);
+			memset(buf, 0, 0x10000);
 			return 0;
 
 		case WM_WINDOWPOSCHANGING:
@@ -677,6 +961,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, (LPARAM)pmd);
 			return 0;
 
+		case WM_SETFOCUS:
+			SetCaret(hWnd, buf, FP, bComposition);
+			return 0;
+
+		case WM_KILLFOCUS:
+			DestroyCaret();
+			return 0;
+
 		case WM_PAINT:
 			hdc = BeginPaint(hWnd, &ps);
 			hMemDC = CreateCompatibleDC(hdc);
@@ -694,12 +986,86 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			DrawTodoList(hMemDC, FontSize, rtTodoList);
 			DrawMemo(hMemDC, FontSize, rtMemo, rtCalendar);
 
+			for(Line = 0; ; Line++){
+				GetLine(hWnd, buf, Line, s, e);
+				if(s == -1){break;}
+				TextOut(hMemDC, 0, Line * GetLineHeight(hWnd), buf + s, e - s);
+			}
+
 			GetObject(hBitmap, sizeof(BITMAP), &bmp);
 			BitBlt(hdc, 0,0, bmp.bmWidth, bmp.bmHeight, hMemDC, 0,0, SRCCOPY);
 
 			SelectObject(hMemDC, hOld);
 			DeleteDC(hMemDC);
 			EndPaint(hWnd, &ps);
+			return 0;
+
+		case WM_IME_STARTCOMPOSITION:
+			return 0;
+
+		case WM_IME_COMPOSITION:
+			if(lParam & GCS_COMPSTR){
+				hImc = ImmGetContext(hWnd);
+
+				CSLength = ImmGetCompositionString(hImc, GCS_COMPSTR, NULL, 0);
+				tbuf = (WCHAR*)malloc(tSize * (CSLength + 1));
+				memset(tbuf, 0, tSize * (CSLength + 1));
+				ImmGetCompositionString(hImc, GCS_COMPSTR, tbuf, CSLength);
+				tbuf[CSLength] = 0;
+
+				if(bComposition){
+					FP -= 2;
+					Delete(buf, FP, 1);
+				}
+
+				bComposition = ((CSLength == 0) ? FALSE : TRUE);
+
+				Insert(buf, FP, tbuf);
+				FP += CSLength;
+				free(tbuf);
+				SetCaret(hWnd, buf, FP, bComposition);
+
+				ImmReleaseContext(hWnd, hImc);
+			}
+			InvalidateRect(hWnd, NULL, FALSE);
+			break;
+
+		case WM_IME_CHAR:
+			szbuf[0] = wParam;
+			szbuf[1] = 0;
+
+			if(bComposition){
+				FP -= tSize;
+				Delete(buf, FP, 1);
+			}
+
+			Insert(buf, FP, szbuf);
+			FP += wcslen(szbuf);
+
+			bComposition = FALSE;
+			SetCaret(hWnd, buf, FP, bComposition);
+			InvalidateRect(hWnd, NULL, FALSE);
+			return 0;
+
+		case WM_CHAR:
+			if(((wParam < ' ') && (wParam != '\r') && (wParam != '\t')) || wParam == 127) { return 0; }
+			if(wParam == '\r'){
+				szAbuf[0] = '\r';
+				szAbuf[1] = '\n';
+				szAbuf[2] = 0;
+			}else{
+				szAbuf[0] = wParam;
+				szAbuf[1] = 0;
+			}
+
+			for(int i=0; i<LOWORD(lParam); i++){
+				Insert(buf, FP, szAbuf);
+				FP += wcslen(szAbuf);
+			}
+
+			bComposition = FALSE;
+			SetCaret(hWnd, buf, FP, bComposition);
+			InvalidateRect(hWnd, NULL, FALSE);
 			return 0;
 
 		case WM_DESTROY:
@@ -712,6 +1078,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 				free(pmd->hMonitors);
 				free(pmd);
 			}
+			free(buf);
 			PostQuitMessage(0);
 			return 0;
 	}
