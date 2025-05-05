@@ -4,10 +4,6 @@
 *.rc
 *.bat
 *.png
-FontTest.cpp
-BitmapTest.cpp
-IMETest.cpp
-IMETestUnicode.cpp
-IME.txt
-CommonTest.cpp
+*.cpp
+!main.cpp
 !WeeklyPlannerSetup.exe
