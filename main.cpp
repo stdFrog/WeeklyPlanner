@@ -29,7 +29,7 @@ void DrawTodoList(HDC hdc, int FontSize, int l, int t, int r, int b);
 void DrawTodoList(HDC hdc, int FontSize, RECT rt);
 void DrawMemo(HDC hdc, int FontSize, int l, int t, int r, int b);
 void DrawMemo(HDC hdc, int FontSize, RECT rt);
-void OnKeyDown(HWND hWnd, WPARAM wParam, LPARAM lParam, struct bwAttributes* Attr);
+// void OnKeyDown(HWND hWnd, WPARAM wParam, LPARAM lParam, struct bwAttributes* Attr);
 void GetRealDpi(HMONITOR hMonitor, float *XScale, float *YScale);
 
 int GetWrap();
@@ -39,7 +39,7 @@ int GetLineHeight(HWND hWnd);
 int GetPrevFP(int iPosition);
 int GetNextFP(int iPosition);
 int GetCharWidth(HDC hdc, WCHAR* ch, int Length);
-void SetCaret(HWND hWnd, WCHAR* buf, int FP, BOOL bComposition);
+void SetCaret(HWND hWnd, WCHAR* buf, int FP, BOOL bComposition, POINT pt);
 
 void Insert(WCHAR* buf, int iPosition, WCHAR* cbuf);
 void Delete(WCHAR* buf, int iPosition, int nCount);
@@ -375,18 +375,11 @@ void GetAttribute(HWND hWnd, struct bwAttributes *Attr){
 	GetLayeredWindowAttributes(hWnd, &Attr->rgb, &Attr->Opacity, &Attr->Flags);
 }
 
+/*
 void OnKeyDown(HWND hWnd, WPARAM wParam, LPARAM lParam, struct bwAttributes* Attr){
 	int ret;
 
 	switch(wParam){
-		case VK_ESCAPE:
-			ret = MessageBox(NULL, L"Do you want to close this program?", L"WeeklyPlanner", MB_YESNO | MB_ICONQUESTION | MB_TASKMODAL);
-
-			if(ret == IDYES){
-				DestroyWindow(hWnd);
-			}
-			break;
-
 		case VK_UP:
 			GetAttribute(hWnd, Attr);
 			Attr->Opacity = min(255, max(50, Attr->Opacity + 5));
@@ -398,8 +391,17 @@ void OnKeyDown(HWND hWnd, WPARAM wParam, LPARAM lParam, struct bwAttributes* Att
 			Attr->Opacity = min(255, max(50, Attr->Opacity - 5));
 			SetAttribute(hWnd, *Attr);
 			break;
+
+		case VK_ESCAPE:
+			ret = MessageBox(NULL, L"Do you want to close this program?", L"WeeklyPlanner", MB_YESNO | MB_ICONQUESTION | MB_TASKMODAL);
+
+			if(ret == IDYES){
+				DestroyWindow(hWnd);
+			}
+			break;
 	}
 }
+*/
 
 void DrawTodoList(HDC hdc, int FontSize, int l, int t, int r, int b){
 	WCHAR buf[0x10];
@@ -422,7 +424,7 @@ void DrawTodoList(HDC hdc, int FontSize, RECT rt){
 
 BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPARAM dwData){
 	MONITORINFOEX miex;
-	
+
 	miex.cbSize = sizeof(MONITORINFOEX);
 	GetMonitorInfo(hMonitor, &miex);
 
@@ -524,7 +526,7 @@ int GetCharWidth(HDC hdc, WCHAR *ch, int Length){
 	return TextSize.cx;
 }
 
-void SetCaret(HWND hWnd, WCHAR* buf, int FP, BOOL bComposition){
+void SetCaret(HWND hWnd, WCHAR* buf, int FP, BOOL bComposition, POINT pt){
 	HDC hdc;
 	SIZE TextSize;
 
@@ -545,7 +547,7 @@ void SetCaret(HWND hWnd, WCHAR* buf, int FP, BOOL bComposition){
 	// SetCaretPos(TextSize.cx, 0);
 
 	GetXYFromOff(hWnd, buf, tFP, x, y);
-	SetCaretPos(x,y);
+	SetCaretPos(pt.x + x, pt.y + y);
 
 	ReleaseDC(hWnd, hdc);
 }
@@ -751,6 +753,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 	int idx, id;
 	int Line, s, e;
 
+	int ret;
+	BOOL bAlt, bCtrl;
+
 	static const int nEdits = 5,
 				 nButtons = 5,
 				 BORDER = 12,
@@ -832,6 +837,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			   Row,
 			   Column;
 
+	static POINT ptCaret;
+
 	switch(iMessage){
 		case WM_CREATE:
 			idx = id = 0;
@@ -901,7 +908,90 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			return 0;
 
 		case WM_KEYDOWN:
-			OnKeyDown(hWnd, wParam, lParam, &Attr);
+			bAlt = (GetKeyState(VK_MENU) & 0x8000);
+			bCtrl = (GetKeyState(VK_MENU) & 0x8000);
+
+			switch(wParam){
+				case VK_BACK:
+					if(FP == 0){ break; }
+					FP = GetPrevFP(FP);
+					SendMessage(hWnd, WM_KEYDOWN, VK_DELETE, 0);
+					SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+					break;
+
+				case VK_DELETE:
+					Delete(buf, FP, 1);
+					break;
+
+				case VK_LEFT:
+					if(FP > 0){
+						FP = GetPrevFP(FP);
+						SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+					}
+					break;
+
+				case VK_RIGHT:
+					if(FP < wcslen(buf)){
+						FP = GetNextFP(FP);
+						SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+					}
+					break;
+
+				case VK_UP:
+					if(bCtrl && bAlt){
+						GetAttribute(hWnd, &Attr);
+						Attr.Opacity = min(255, max(50, Attr.Opacity + 5));
+						SetAttribute(hWnd, Attr);
+						break;
+					}
+
+					GetRCFromOff(hWnd, buf, FP, Row, Column);
+					if(Row > 0){
+						Row--;
+						FP = GetOffFromRC(hWnd, buf, Row, Column);
+						SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+					}
+					break;
+
+				case VK_DOWN:
+					if(bCtrl && bAlt){
+						GetAttribute(hWnd, &Attr);
+						Attr.Opacity = min(255, max(50, Attr.Opacity - 5));
+						SetAttribute(hWnd, Attr);
+						break;
+					}
+
+					GetRCFromOff(hWnd, buf, FP, Row, Column);
+					if(Row < GetRowCount(hWnd, buf) - 1){
+						Row++;
+						FP = GetOffFromRC(hWnd, buf, Row, Column);
+						SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+					}
+					break;
+
+				case VK_HOME:
+					GetRCFromOff(hWnd, buf, FP, Row, Column);
+					FP = GetOffFromRC(hWnd, buf, Row, 0);
+					SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+					break;
+
+				case VK_END:
+					GetRCFromOff(hWnd, buf, FP, Row, Column);
+					FP = GetOffFromRC(hWnd, buf, Row, 0x10000000);
+					SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+					break;
+
+				case VK_ESCAPE:
+					ret = MessageBox(NULL, L"Do you want to close this program?", L"WeeklyPlanner", MB_YESNO | MB_ICONQUESTION | MB_TASKMODAL);
+
+					if(ret == IDYES){
+						DestroyWindow(hWnd);
+					}
+					break;
+			}
+
+			InvalidateRect(hWnd, NULL, FALSE);
+
 			return 0;
 
 		case WM_NCHITTEST:
@@ -946,6 +1036,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 				SetRect(&rtCalendar, rtCalendar.left, rtCalendar.top, rtCalendar.left + GapWidth, rtCalendar.top + GapWidth);
 				SetRect(&rtTodoList, rtCalendar.left, rtCalendar.bottom + GridGap, 0,0);
 				SetRect(&rtMemo, rtTodoList.left, rtTodoList.top + FontSize + (ButtonHeight + GridGap * 2) * (nButtons - 1), 0,0);
+				ptCaret.x = rtCalendar.left + rtCalendar.right;
+				ptCaret.y = 0;
 
 				int x = rtTodoList.left,
 					y = rtTodoList.top + FontSize + GridGap;
@@ -962,42 +1054,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			return 0;
 
 		case WM_SETFOCUS:
-			SetCaret(hWnd, buf, FP, bComposition);
+			SetCaret(hWnd, buf, FP, bComposition, ptCaret);
 			return 0;
 
 		case WM_KILLFOCUS:
 			DestroyCaret();
-			return 0;
-
-		case WM_PAINT:
-			hdc = BeginPaint(hWnd, &ps);
-			hMemDC = CreateCompatibleDC(hdc);
-
-			GetClientRect(hWnd, &crt);
-			if(hBitmap == NULL){
-				hBitmap = CreateCompatibleBitmap(hdc, crt.right, crt.bottom);
-			}
-			hOld = SelectObject(hMemDC, hBitmap);
-			FillRect(hMemDC, &crt, hBkBrush);
-
-			// Draw
-			DrawBackground(hWnd, hMemDC, GapWidth, GridGap);
-			DrawCalendar(hMemDC, rtCalendar);
-			DrawTodoList(hMemDC, FontSize, rtTodoList);
-			DrawMemo(hMemDC, FontSize, rtMemo, rtCalendar);
-
-			for(Line = 0; ; Line++){
-				GetLine(hWnd, buf, Line, s, e);
-				if(s == -1){break;}
-				TextOut(hMemDC, 0, Line * GetLineHeight(hWnd), buf + s, e - s);
-			}
-
-			GetObject(hBitmap, sizeof(BITMAP), &bmp);
-			BitBlt(hdc, 0,0, bmp.bmWidth, bmp.bmHeight, hMemDC, 0,0, SRCCOPY);
-
-			SelectObject(hMemDC, hOld);
-			DeleteDC(hMemDC);
-			EndPaint(hWnd, &ps);
 			return 0;
 
 		case WM_IME_STARTCOMPOSITION:
@@ -1023,7 +1084,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 				Insert(buf, FP, tbuf);
 				FP += CSLength;
 				free(tbuf);
-				SetCaret(hWnd, buf, FP, bComposition);
+				SetCaret(hWnd, buf, FP, bComposition, ptCaret);
 
 				ImmReleaseContext(hWnd, hImc);
 			}
@@ -1043,7 +1104,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			FP += wcslen(szbuf);
 
 			bComposition = FALSE;
-			SetCaret(hWnd, buf, FP, bComposition);
+			SetCaret(hWnd, buf, FP, bComposition, ptCaret);
 			InvalidateRect(hWnd, NULL, FALSE);
 			return 0;
 
@@ -1064,8 +1125,41 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			}
 
 			bComposition = FALSE;
-			SetCaret(hWnd, buf, FP, bComposition);
+			SetCaret(hWnd, buf, FP, bComposition, ptCaret);
 			InvalidateRect(hWnd, NULL, FALSE);
+			return 0;
+
+		case WM_PAINT:
+			hdc = BeginPaint(hWnd, &ps);
+			hMemDC = CreateCompatibleDC(hdc);
+
+			GetClientRect(hWnd, &crt);
+			if(hBitmap == NULL){
+				hBitmap = CreateCompatibleBitmap(hdc, crt.right, crt.bottom);
+			}
+			hOld = SelectObject(hMemDC, hBitmap);
+			FillRect(hMemDC, &crt, hBkBrush);
+
+			// Draw
+			DrawBackground(hWnd, hMemDC, GapWidth, GridGap);
+			DrawCalendar(hMemDC, rtCalendar);
+			DrawTodoList(hMemDC, FontSize, rtTodoList);
+			DrawMemo(hMemDC, FontSize, rtMemo, rtCalendar);
+
+			SetBkMode(hMemDC, TRANSPARENT);
+			for(Line = 0; ; Line++){
+				GetLine(hWnd, buf, Line, s, e);
+				if(s == -1){break;}
+				TextOut(hMemDC, rtCalendar.left + rtCalendar.right, Line * GetLineHeight(hWnd), buf + s, e - s);
+			}
+			SetBkMode(hMemDC, OPAQUE);
+
+			GetObject(hBitmap, sizeof(BITMAP), &bmp);
+			BitBlt(hdc, 0,0, bmp.bmWidth, bmp.bmHeight, hMemDC, 0,0, SRCCOPY);
+
+			SelectObject(hMemDC, hOld);
+			DeleteDC(hMemDC);
+			EndPaint(hWnd, &ps);
 			return 0;
 
 		case WM_DESTROY:
