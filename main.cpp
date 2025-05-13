@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <imm.h>
+#include <dbt.h>
 #define CLASS_NAME			L"Weekly Planner"
 #define IDC_BTNTODOLIST		0x1000
 
@@ -355,32 +356,32 @@ void GetAttribute(HWND hWnd, struct bwAttributes *Attr){
 }
 
 /*
-void OnKeyDown(HWND hWnd, WPARAM wParam, LPARAM lParam, struct bwAttributes* Attr){
-	int ret;
+   void OnKeyDown(HWND hWnd, WPARAM wParam, LPARAM lParam, struct bwAttributes* Attr){
+   int ret;
 
-	switch(wParam){
-		case VK_UP:
-			GetAttribute(hWnd, Attr);
-			Attr->Opacity = min(255, max(50, Attr->Opacity + 5));
-			SetAttribute(hWnd, *Attr);
-			break;
+   switch(wParam){
+   case VK_UP:
+   GetAttribute(hWnd, Attr);
+   Attr->Opacity = min(255, max(50, Attr->Opacity + 5));
+   SetAttribute(hWnd, *Attr);
+   break;
 
-		case VK_DOWN:
-			GetAttribute(hWnd, Attr);
-			Attr->Opacity = min(255, max(50, Attr->Opacity - 5));
-			SetAttribute(hWnd, *Attr);
-			break;
+   case VK_DOWN:
+   GetAttribute(hWnd, Attr);
+   Attr->Opacity = min(255, max(50, Attr->Opacity - 5));
+   SetAttribute(hWnd, *Attr);
+   break;
 
-		case VK_ESCAPE:
-			ret = MessageBox(NULL, L"Do you want to close this program?", L"WeeklyPlanner", MB_YESNO | MB_ICONQUESTION | MB_TASKMODAL);
+   case VK_ESCAPE:
+   ret = MessageBox(NULL, L"Do you want to close this program?", L"WeeklyPlanner", MB_YESNO | MB_ICONQUESTION | MB_TASKMODAL);
 
-			if(ret == IDYES){
-				DestroyWindow(hWnd);
-			}
-			break;
-	}
-}
-*/
+   if(ret == IDYES){
+   DestroyWindow(hWnd);
+   }
+   break;
+   }
+   }
+ */
 
 void DrawTodoList(HDC hdc, int FontSize, int l, int t, int r, int b){
 	WCHAR buf[0x10];
@@ -613,9 +614,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			// SetImeMode(hWnd, TRUE);
 
 			/*
-			buf = (WCHAR*)malloc(0x10000);
-			memset(buf, 0, 0x10000);
-			*/
+			   buf = (WCHAR*)malloc(0x10000);
+			   memset(buf, 0, 0x10000);
+			 */
 			return 0;
 
 		case WM_WINDOWPOSCHANGING:
@@ -664,13 +665,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 					}
 
 					/*
-					GetRCFromOff(hWnd, buf, FP, Row, Column);
-					if(Row > 0){
-						Row--;
-						FP = GetOffFromRC(hWnd, buf, Row, Column);
-						SetCaret(hWnd, buf, FP, bComposition, ptCaret);
-					}
-					*/
+					   GetRCFromOff(hWnd, buf, FP, Row, Column);
+					   if(Row > 0){
+					   Row--;
+					   FP = GetOffFromRC(hWnd, buf, Row, Column);
+					   SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+					   }
+					 */
 					break;
 
 				case VK_DOWN:
@@ -682,53 +683,53 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 					}
 
 					/*
-					GetRCFromOff(hWnd, buf, FP, Row, Column);
-					if(Row < GetRowCount(hWnd, buf) - 1){
-						Row++;
-						FP = GetOffFromRC(hWnd, buf, Row, Column);
-						SetCaret(hWnd, buf, FP, bComposition, ptCaret);
-					}
-					*/
+					   GetRCFromOff(hWnd, buf, FP, Row, Column);
+					   if(Row < GetRowCount(hWnd, buf) - 1){
+					   Row++;
+					   FP = GetOffFromRC(hWnd, buf, Row, Column);
+					   SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+					   }
+					 */
 					break;
 
-				/*
-				case VK_BACK:
-					if(FP == 0){ break; }
-					FP = GetPrevFP(FP);
-					SendMessage(hWnd, WM_KEYDOWN, VK_DELETE, 0);
-					SetCaret(hWnd, buf, FP, bComposition, ptCaret);
-					break;
+					/*
+					   case VK_BACK:
+					   if(FP == 0){ break; }
+					   FP = GetPrevFP(FP);
+					   SendMessage(hWnd, WM_KEYDOWN, VK_DELETE, 0);
+					   SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+					   break;
 
-				case VK_DELETE:
-					Delete(buf, FP, 1);
-					break;
+					   case VK_DELETE:
+					   Delete(buf, FP, 1);
+					   break;
 
-				case VK_LEFT:
-					if(FP > 0){
-						FP = GetPrevFP(FP);
-						SetCaret(hWnd, buf, FP, bComposition, ptCaret);
-					}
-					break;
+					   case VK_LEFT:
+					   if(FP > 0){
+					   FP = GetPrevFP(FP);
+					   SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+					   }
+					   break;
 
-				case VK_RIGHT:
-					if(FP < wcslen(buf)){
-						FP = GetNextFP(FP);
-						SetCaret(hWnd, buf, FP, bComposition, ptCaret);
-					}
-					break;
+					   case VK_RIGHT:
+					   if(FP < wcslen(buf)){
+					   FP = GetNextFP(FP);
+					   SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+					   }
+					   break;
 
-				case VK_HOME:
-					GetRCFromOff(hWnd, buf, FP, Row, Column);
-					FP = GetOffFromRC(hWnd, buf, Row, 0);
-					SetCaret(hWnd, buf, FP, bComposition, ptCaret);
-					break;
+					   case VK_HOME:
+					   GetRCFromOff(hWnd, buf, FP, Row, Column);
+					   FP = GetOffFromRC(hWnd, buf, Row, 0);
+					   SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+					   break;
 
-				case VK_END:
-					GetRCFromOff(hWnd, buf, FP, Row, Column);
-					FP = GetOffFromRC(hWnd, buf, Row, 0x10000000);
-					SetCaret(hWnd, buf, FP, bComposition, ptCaret);
-					break;
-					*/
+					   case VK_END:
+					   GetRCFromOff(hWnd, buf, FP, Row, Column);
+					   FP = GetOffFromRC(hWnd, buf, Row, 0x10000000);
+					   SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+					   break;
+					 */
 
 				case VK_ESCAPE:
 					ret = MessageBox(NULL, L"Do you want to close this program?", L"WeeklyPlanner", MB_YESNO | MB_ICONQUESTION | MB_TASKMODAL);
@@ -801,95 +802,123 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, (LPARAM)pmd);
 			return 0;
 
-			/*
-		case WM_EXITSIZEMOVE:
-			SetCaret(hWnd, buf, FP, bComposition, ptCaret);
-			return 0;
-			*/
+		case WM_DEVICECHANGE:
+			{
+				DEV_BROADCAST_HDR *hdr = (DEV_BROADCAST_HDR*)lParam;
+				DISPLAY_DEVICE dd = {0,};
 
-			/*
-		case WM_SETFOCUS:
-			SetCaret(hWnd, buf, FP, bComposition, ptCaret);
-			return 0;
+				int idx = 0,
+					CurrentMonitors = 0;
+				switch(wParam){
+					case DBT_DEVNODES_CHANGED:
+					case DBT_DEVICEARRIVAL:
+						dd.cb = sizeof(dd);
+						while(EnumDisplayDevices(NULL, idx, &dd, 0)){
+							if(dd.StateFlags & DISPLAY_DEVICE_ACTIVE){
+								CurrentMonitors++;
+							}
+							idx++;
+						}
 
-		case WM_KILLFOCUS:
-			DestroyCaret();
-			return 0;
-			*/
-
-			/*
-		case WM_IME_STARTCOMPOSITION:
-			return 0;
-
-		case WM_IME_COMPOSITION:
-			if(lParam & GCS_COMPSTR){
-				hImc = ImmGetContext(hWnd);
-
-				CSLength = ImmGetCompositionString(hImc, GCS_COMPSTR, NULL, 0);
-				tbuf = (WCHAR*)malloc(tSize * (CSLength + 1));
-				memset(tbuf, 0, tSize * (CSLength + 1));
-				ImmGetCompositionString(hImc, GCS_COMPSTR, tbuf, CSLength);
-				tbuf[CSLength] = 0;
-
-				if(bComposition){
-					FP -= 2;
-					Delete(buf, FP, 1);
+						if(pmd->nMonitors != CurrentMonitors){
+							pmd->nMonitors = CurrentMonitors;
+							EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, (LPARAM)pmd);
+						}
+						break;
 				}
 
-				bComposition = ((CSLength == 0) ? FALSE : TRUE);
-
-				Insert(buf, FP, tbuf);
-				FP += CSLength;
-				free(tbuf);
-				SetCaret(hWnd, buf, FP, bComposition, ptCaret);
-
-				ImmReleaseContext(hWnd, hImc);
 			}
-			InvalidateRect(hWnd, NULL, FALSE);
 			break;
-			*/
 
 			/*
-		case WM_IME_CHAR:
-			szbuf[0] = wParam;
-			szbuf[1] = 0;
-
-			if(bComposition){
-				FP -= tSize;
-				Delete(buf, FP, 1);
-			}
-
-			Insert(buf, FP, szbuf);
-			FP += wcslen(szbuf);
-
-			bComposition = FALSE;
-			SetCaret(hWnd, buf, FP, bComposition, ptCaret);
-			InvalidateRect(hWnd, NULL, FALSE);
-			return 0;
-			*/
+			   case WM_EXITSIZEMOVE:
+			   SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+			   return 0;
+			 */
 
 			/*
-		case WM_CHAR:
-			if(((wParam < ' ') && (wParam != '\r') && (wParam != '\t')) || wParam == 127) { return 0; }
-			if(wParam == '\r'){
-				szAbuf[0] = '\r';
-				szAbuf[1] = '\n';
-				szAbuf[2] = 0;
-			}else{
-				szAbuf[0] = wParam;
-				szAbuf[1] = 0;
-			}
+			   case WM_SETFOCUS:
+			   SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+			   return 0;
 
-			for(int i=0; i<LOWORD(lParam); i++){
-				Insert(buf, FP, szAbuf);
-				FP += wcslen(szAbuf);
-			}
+			   case WM_KILLFOCUS:
+			   DestroyCaret();
+			   return 0;
+			 */
 
-			bComposition = FALSE;
-			SetCaret(hWnd, buf, FP, bComposition, ptCaret);
-			InvalidateRect(hWnd, NULL, FALSE);
-			return 0;
-			*/
+			/*
+			   case WM_IME_STARTCOMPOSITION:
+			   return 0;
+
+			   case WM_IME_COMPOSITION:
+			   if(lParam & GCS_COMPSTR){
+			   hImc = ImmGetContext(hWnd);
+
+			   CSLength = ImmGetCompositionString(hImc, GCS_COMPSTR, NULL, 0);
+			   tbuf = (WCHAR*)malloc(tSize * (CSLength + 1));
+			   memset(tbuf, 0, tSize * (CSLength + 1));
+			   ImmGetCompositionString(hImc, GCS_COMPSTR, tbuf, CSLength);
+			   tbuf[CSLength] = 0;
+
+			   if(bComposition){
+			   FP -= 2;
+			   Delete(buf, FP, 1);
+			   }
+
+			   bComposition = ((CSLength == 0) ? FALSE : TRUE);
+
+			   Insert(buf, FP, tbuf);
+			   FP += CSLength;
+			   free(tbuf);
+			   SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+
+			   ImmReleaseContext(hWnd, hImc);
+			   }
+			   InvalidateRect(hWnd, NULL, FALSE);
+			   break;
+			 */
+
+			/*
+			   case WM_IME_CHAR:
+			   szbuf[0] = wParam;
+			   szbuf[1] = 0;
+
+			   if(bComposition){
+			   FP -= tSize;
+			   Delete(buf, FP, 1);
+			   }
+
+			   Insert(buf, FP, szbuf);
+			   FP += wcslen(szbuf);
+
+			   bComposition = FALSE;
+			   SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+			   InvalidateRect(hWnd, NULL, FALSE);
+			   return 0;
+			 */
+
+			/*
+			   case WM_CHAR:
+			   if(((wParam < ' ') && (wParam != '\r') && (wParam != '\t')) || wParam == 127) { return 0; }
+			   if(wParam == '\r'){
+			   szAbuf[0] = '\r';
+			   szAbuf[1] = '\n';
+			   szAbuf[2] = 0;
+			   }else{
+			   szAbuf[0] = wParam;
+			   szAbuf[1] = 0;
+			   }
+
+			   for(int i=0; i<LOWORD(lParam); i++){
+			   Insert(buf, FP, szAbuf);
+			   FP += wcslen(szAbuf);
+			   }
+
+			   bComposition = FALSE;
+			   SetCaret(hWnd, buf, FP, bComposition, ptCaret);
+			   InvalidateRect(hWnd, NULL, FALSE);
+			   return 0;
+			 */
 
 		case WM_PAINT:
 			hdc = BeginPaint(hWnd, &ps);
@@ -909,14 +938,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 			DrawMemo(hMemDC, FontSize, rtMemo, rtCalendar);
 
 			/*
-			SetBkMode(hMemDC, TRANSPARENT);
-			for(Line = 0; ; Line++){
-				GetLine(hWnd, buf, Line, s, e);
-				if(s == -1){break;}
-				TextOut(hMemDC, rtCalendar.left + rtCalendar.right, Line * GetLineHeight(hWnd), buf + s, e - s);
-			}
-			SetBkMode(hMemDC, OPAQUE);
-			*/
+			   SetBkMode(hMemDC, TRANSPARENT);
+			   for(Line = 0; ; Line++){
+			   GetLine(hWnd, buf, Line, s, e);
+			   if(s == -1){break;}
+			   TextOut(hMemDC, rtCalendar.left + rtCalendar.right, Line * GetLineHeight(hWnd), buf + s, e - s);
+			   }
+			   SetBkMode(hMemDC, OPAQUE);
+			 */
 
 			GetObject(hBitmap, sizeof(BITMAP), &bmp);
 			BitBlt(hdc, 0,0, bmp.bmWidth, bmp.bmHeight, hMemDC, 0,0, SRCCOPY);
